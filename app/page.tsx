@@ -100,8 +100,7 @@ export default function AdvancedQuantDashboard() {
       const { data: histData } = await supabase
         .from("portfolio_history")
         .select("*")
-        .order("date", { ascending: true })
-        .limit(30);
+        .order("date", { ascending: true });
       const { data: posData } = await supabase
         .from("current_positions")
         .select("*")
@@ -109,8 +108,7 @@ export default function AdvancedQuantDashboard() {
       const { data: macroData } = await supabase
         .from("macro_data")
         .select("*")
-        .order("timestamp", { ascending: false })
-        .limit(20);
+        .order("timestamp", { ascending: false });
 
       // 2. Fetch Assets & Market Data untuk Matriks Dinamis
       const { data: assetsData } = await supabase
@@ -125,8 +123,7 @@ export default function AdvancedQuantDashboard() {
       const { data: marketData } = await supabase
         .from("market_data")
         .select("asset_id, close, timestamp")
-        .order("timestamp", { ascending: false })
-        .limit(200);
+        .order("timestamp", { ascending: false });
 
       if (marketData && assetMap.size > 0) {
         // Kelompokkan harga berdasarkan koin
@@ -424,32 +421,68 @@ export default function AdvancedQuantDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
-              {positions.map((p, i) => (
-                <tr key={i} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4 font-bold text-white flex items-center gap-2">
-                    {p.symbol}
-                    {p.symbol === "PAXG" && (
-                      <span className="bg-yellow-500/10 text-yellow-500 text-[9px] px-1.5 py-0.5 rounded border border-yellow-500/20">
-                        SAFE HAVEN
-                      </span>
-                    )}
-                    {p.symbol !== "USDT" && parseFloat(p.percentage) > 25 && (
-                      <span className="bg-cyan-500/10 text-cyan-500 text-[9px] px-1.5 py-0.5 rounded border border-cyan-500/20">
-                        WHALE LOAD
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 font-mono text-cyan-400">
-                    {p.percentage}%
-                  </td>
-                  <td className="px-6 py-4 text-slate-400">
-                    ${parseFloat(p.avg_price || 0).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 text-right text-xs font-semibold text-green-400">
-                    OUTPERFORMING
-                  </td>
-                </tr>
-              ))}
+              {positions.map((p, i) => {
+                // 1. Ambil data koin dari btcMatrix yang sudah kita hitung di useEffect
+                const assetStatus = btcMatrix.find((m) =>
+                  m.title.startsWith(p.symbol),
+                );
+
+                // 2. Tentukan warna berdasarkan bias
+                const isOutperform =
+                  assetStatus?.bias === "Outperforming" ||
+                  assetStatus?.bias === "Bullish";
+                const isUnderperform =
+                  assetStatus?.bias === "Underperforming" ||
+                  assetStatus?.bias === "Bearish";
+
+                return (
+                  <tr
+                    key={i}
+                    className="hover:bg-slate-800/30 transition-colors"
+                  >
+                    <td className="px-6 py-4 font-bold text-white flex items-center gap-2">
+                      {p.symbol}
+                      {p.symbol === "PAXG" && (
+                        <span className="bg-yellow-500/10 text-yellow-500 text-[9px] px-1.5 py-0.5 rounded border border-yellow-500/20">
+                          SAFE HAVEN
+                        </span>
+                      )}
+                      {p.symbol !== "USDT" && parseFloat(p.percentage) > 25 && (
+                        <span className="bg-cyan-500/10 text-cyan-500 text-[9px] px-1.5 py-0.5 rounded border border-cyan-500/20">
+                          WHALE LOAD
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-cyan-400">
+                      {p.percentage}%
+                    </td>
+                    <td className="px-6 py-4 text-slate-400">
+                      ${parseFloat(p.avg_price || 0).toLocaleString()}
+                    </td>
+
+                    {/* REVISI BAGIAN STATUS DI SINI */}
+                    <td
+                      className={`px-6 py-4 text-right text-xs font-bold tracking-widest uppercase`}
+                    >
+                      {p.symbol === "USDT" ? (
+                        <span className="text-slate-500">STABLE</span>
+                      ) : (
+                        <span
+                          className={
+                            isOutperform
+                              ? "text-cyan-400"
+                              : isUnderperform
+                                ? "text-orange-400"
+                                : "text-slate-400"
+                          }
+                        >
+                          {assetStatus?.bias || "NEUTRAL"}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
