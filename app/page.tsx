@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { getDetailedQuantMetrics } from "@/lib/quantLogic";
 import {
   LineChart,
   Line,
@@ -21,6 +22,7 @@ import {
   Repeat,
   Zap,
   Globe,
+  Info,
 } from "lucide-react";
 import { PerformanceChart } from "./components/PerformanceChart";
 
@@ -93,6 +95,26 @@ export default function AdvancedQuantDashboard() {
   const [ethMatrix, setEthMatrix] = useState<any[]>([]);
   const [solMatrix, setSolMatrix] = useState<any[]>([]);
   const [dogeMatrix, setDogeMatrix] = useState<any[]>([]);
+
+  const [quantMetrics, setQuantMetrics] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchMetrics() {
+      const data = await getDetailedQuantMetrics("BTCUSDT");
+      setQuantMetrics(data);
+    }
+    fetchMetrics();
+  }, []);
+
+  // Helper untuk Tooltip sederhana
+  const Tooltip = ({ text }: { text: string }) => (
+    <div className="group relative inline-block ml-1">
+      <Info size={10} className="text-slate-600 cursor-help" />
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-slate-800 text-[9px] text-slate-300 rounded-lg border border-slate-700 z-50 shadow-2xl">
+        {text}
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     async function fetchData() {
@@ -249,7 +271,7 @@ export default function AdvancedQuantDashboard() {
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2 tracking-tight text-white">
               <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
-              ORACLE COMMAND CENTER V2
+              ORACLE COMMAND CENTER
             </h1>
           </div>
           <div className="flex gap-6 items-center">
@@ -266,51 +288,79 @@ export default function AdvancedQuantDashboard() {
 
         {/* TOP ROW: QUANT CARDS (TPI, REGIME, CYCLE, BIAS) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* TPICard */}
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
+          {/* TPICard - Trend Persistence */}
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-visible group">
             <TrendingUp className="absolute -right-2 -bottom-2 w-16 h-16 text-slate-800 group-hover:text-cyan-900/40 transition-colors" />
-            <p className="text-xs text-slate-500 uppercase font-bold">
-              Trend Persistence (TPI)
-            </p>
-            <p className="text-3xl font-mono font-bold text-cyan-400 mt-2">
-              {tpiScore}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-1">
-              Status: Strong Trend
+            <div className="flex items-center">
+              <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">
+                Trend Persistence
+              </p>
+              <Tooltip text="MTPI (14d) & LTPI (50d) mengukur efisiensi tren. Skor > 0.5 menunjukkan tren yang stabil dan minim noise." />
+            </div>
+            <div className="flex items-baseline gap-2 mt-2">
+              <p className="text-3xl font-mono font-bold text-cyan-400">
+                {quantMetrics?.tpi.mTpi || "0.00"}
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono">
+                / {quantMetrics?.tpi.lTpi}
+              </p>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-semibold">
+              Status: {quantMetrics?.tpi.status || "Analyzing..."}
             </p>
           </div>
 
-          {/* RegimeCard */}
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
+          {/* RegimeCard - Market Regime */}
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-visible group">
             <Globe className="absolute -right-2 -bottom-2 w-16 h-16 text-slate-800 group-hover:text-purple-900/40 transition-colors" />
-            <p className="text-xs text-slate-500 uppercase font-bold">
-              Market Regime
+            <div className="flex items-center">
+              <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">
+                Market Regime
+              </p>
+              <Tooltip text="Menentukan apakah pasar dalam fase Trending (Markup/Markdown) atau Mean Reversion (Sideways) berdasarkan SMA200 & ADX." />
+            </div>
+            <p className="text-2xl font-bold text-purple-400 mt-2 truncate">
+              {quantMetrics?.regime.type || "NEUTRAL"}
             </p>
-            <p className="text-2xl font-bold text-purple-400 mt-2">{regime}</p>
-            <p className="text-[10px] text-slate-400 mt-1">
-              Based on Mayer Multiple
+            <p className="text-[10px] text-slate-400 mt-1 italic leading-tight">
+              {quantMetrics?.regime.note || "Calculating market bias..."}
             </p>
           </div>
 
-          {/* CycleCard */}
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
+          {/* CycleCard - Cycle Position */}
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-visible group">
             <Repeat className="absolute -right-2 -bottom-2 w-16 h-16 text-slate-800 group-hover:text-amber-900/40 transition-colors" />
-            <p className="text-xs text-slate-500 uppercase font-bold">
-              Cycle Position
+            <div className="flex items-center">
+              <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">
+                Cycle Position
+              </p>
+              <Tooltip text="Z-Score Mayer Multiple. Skor > +2.0 berarti Overbought (Panas), Skor < -1.5 berarti Oversold (Murah)." />
+            </div>
+            <p className="text-2xl font-bold text-amber-400 mt-2">
+              {quantMetrics?.cycle.zScore || "0.0"}σ
             </p>
-            <p className="text-2xl font-bold text-amber-400 mt-2">{cycle}</p>
-            <p className="text-[10px] text-slate-400 mt-1">Expansion Phase</p>
+            <p className="text-[10px] text-slate-400 mt-1 uppercase font-semibold">
+              {quantMetrics?.cycle.status || "FAIR VALUE"} (
+              {quantMetrics?.cycle.value}x MM)
+            </p>
           </div>
 
-          {/* BiasCard */}
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
+          {/* BiasCard - Directional Bias */}
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-visible group">
             <Zap className="absolute -right-2 -bottom-2 w-16 h-16 text-slate-800 group-hover:text-green-900/40 transition-colors" />
-            <p className="text-xs text-slate-500 uppercase font-bold">
-              Directional Bias
+            <div className="flex items-center">
+              <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">
+                Exposure Mode
+              </p>
+              <Tooltip text="Risk-On: Kondisi mendukung aset kripto. Risk-Off: Sistem memprioritaskan keamanan modal (Cash/Stable)." />
+            </div>
+            <p
+              className={`text-2xl font-bold mt-2 ${quantMetrics?.exposure.type === "RISK-ON" ? "text-green-400" : "text-red-400"}`}
+            >
+              {quantMetrics?.exposure.type || "WAITING"}
             </p>
-            <p className="text-2xl font-bold text-green-400 mt-2">BULLISH</p>
             <p className="text-[10px] text-slate-400 mt-1">
-              Sentiment: Risk-On
+              Sentiment: {quantMetrics?.exposure.sentiment || "Neutral"}
             </p>
           </div>
         </div>
