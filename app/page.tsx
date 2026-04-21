@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { getDetailedQuantMetrics } from "@/lib/quantLogic";
 import {
@@ -98,6 +98,70 @@ export default function AdvancedQuantDashboard() {
 
   const [quantMetrics, setQuantMetrics] = useState<any>(null);
 
+  const [trades, setTrades] = useState<any[]>([]);
+
+  // 1. Tambahkan state baru di bagian atas komponen
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // Anda bisa mengubah angka ini sesuai selera (misal 15 atau 20)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("ALL"); // ALL, BUY, SELL
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  }>({
+    key: "timestamp",
+    direction: "desc",
+  });
+
+  // Reset halaman ke 1 setiap kali user melakukan pencarian atau mengubah filter
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, sortConfig]);
+
+  // 2. Logika Pemrosesan Data (Filter, Search, & Sort)
+  const processedTrades = useMemo(() => {
+    let result = [...trades];
+
+    // Fitur Search (berdasarkan Simbol)
+    if (searchTerm) {
+      result = result.filter((t) =>
+        t.symbol.toLowerCase().includes(searchTerm.toLowerCase()),
+      );
+    }
+
+    // Fitur Filter Type (BUY/SELL)
+    if (filterType !== "ALL") {
+      result = result.filter((t) => t.type === filterType);
+    }
+
+    // Fitur Sort
+    result.sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [trades, searchTerm, filterType, sortConfig]);
+
+  const totalPages = Math.ceil(processedTrades.length / itemsPerPage);
+  const paginatedTrades = processedTrades.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
+
+  // Helper untuk mengubah arah sort
+  const requestSort = (key: string) => {
+    let direction: "asc" | "desc" = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
   useEffect(() => {
     async function fetchMetrics() {
       const data = await getDetailedQuantMetrics("BTCUSDT");
@@ -131,6 +195,14 @@ export default function AdvancedQuantDashboard() {
         .from("macro_data")
         .select("*")
         .order("timestamp", { ascending: false });
+
+      const { data: tradeData } = await supabase
+        .from("trade_history")
+        .select("*")
+        .order("timestamp", { ascending: false })
+        .limit(1000); // Ambil 10 transaksi terakhir
+
+      if (tradeData) setTrades(tradeData);
 
       // 2. Fetch Assets & Market Data untuk Matriks Dinamis
       const { data: assetsData } = await supabase
@@ -467,6 +539,9 @@ export default function AdvancedQuantDashboard() {
                 <th className="px-6 py-3">Asset</th>
                 <th className="px-6 py-3">Porsi (%)</th>
                 <th className="px-6 py-3">Avg Price</th>
+                <th className="px-6 py-4 border-b border-slate-800 text-right">
+                  Asset Amount
+                </th>
                 <th className="px-6 py-3 text-right">Status</th>
               </tr>
             </thead>
@@ -508,6 +583,13 @@ export default function AdvancedQuantDashboard() {
                     </td>
                     <td className="px-6 py-4 text-slate-400">
                       ${parseFloat(p.avg_price || 0).toLocaleString()}
+                    </td>
+                    {/* Update baris data */}
+                    <td className="px-6 py-4 text-right text-slate-300 font-mono text-xs">
+                      {parseFloat(p.amount || 0).toFixed(6)}
+                      <span className="ml-1 text-[9px] text-slate-500">
+                        {p.symbol}
+                      </span>
                     </td>
 
                     {/* REVISI BAGIAN STATUS DI SINI */}
@@ -623,6 +705,235 @@ export default function AdvancedQuantDashboard() {
               ))}
             </div>
           </section>
+          {/* Dynamic Table with Pagination */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left border-collapse">
+              <thead className="text-slate-500 text-[10px] uppercase bg-slate-950/90 border-b border-slate-800">
+                <tr>
+                  {[
+                    { label: "Timestamp", key: "timestamp" },
+                    { label: "Asset", key: "symbol" },
+                    { label: "Type", key: "type", align: "text-center" },
+                    { label: "Price", key: "exit_price", align: "text-right" },
+                    { label: "Amount", key: "amount", align: "text-right" },
+                    { label: "Size (USDT)", key: "size", align: "text-right" },
+                    { label: "PnL ($)", key: "pnl_value", align: "text-right" },
+                    {
+                      label: "PnL (%)",
+                      key: "pnl_percent",
+                      align: "text-right",
+                    },
+                  ].map((col) => (
+                    <th
+                      key={col.key}
+                      onClick={() => requestSort(col.key)}
+                      className={`px-6 py-4 cursor-pointer hover:text-white transition-colors ${col.align || ""}`}
+                    >
+                      <div
+                        className={`flex items-center gap-1 ${col.align === "text-right" ? "justify-end" : col.align === "text-center" ? "justify-center" : ""}`}
+                      >
+                        {col.label}
+                        {sortConfig.key === col.key && (
+                          <span className="text-cyan-500">
+                            {sortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {paginatedTrades.length > 0 ? (
+                  paginatedTrades.map((trade, i) => {
+                    // Deklarasi variabel pendukung audit
+                    const tradePrice = parseFloat(
+                      trade.exit_price || trade.entry_price || 0,
+                    );
+                    const tradeAmount = parseFloat(trade.amount || 0);
+                    const tradeSize = tradePrice * tradeAmount;
+                    const pnlVal = parseFloat(trade.pnl_value || 0);
+                    const pnlPct = parseFloat(trade.pnl_percent || 0);
+
+                    // Helper untuk format angka (koin murah vs koin mahal)
+                    const formatNumber = (num: number, isPrice = false) => {
+                      if (num === 0) return "0.00";
+                      // Jika harga di bawah $1 (seperti SUI atau koin retail), tampilkan 4 desimal
+                      if (num < 1) return num.toFixed(isPrice ? 4 : 2);
+                      return num.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      });
+                    };
+
+                    return (
+                      <tr
+                        key={i}
+                        className="hover:bg-slate-800/40 transition-all group"
+                      >
+                        {/* 1. Timestamp */}
+                        <td className="px-6 py-4 text-slate-500 font-mono text-[10px] whitespace-nowrap">
+                          {new Date(trade.timestamp).toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+
+                        {/* 2. Asset Symbol */}
+                        <td className="px-6 py-4 font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">
+                          {trade.symbol}
+                        </td>
+
+                        {/* 3. Execution Type */}
+                        <td className="px-6 py-4 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${
+                              trade.type === "BUY"
+                                ? "bg-cyan-500/5 text-cyan-500 border-cyan-500/20"
+                                : "bg-purple-500/5 text-purple-400 border-purple-500/20"
+                            }`}
+                          >
+                            {trade.type}
+                          </span>
+                        </td>
+
+                        {/* 4. Execution Price */}
+                        <td className="px-6 py-4 text-right text-slate-300 font-mono text-xs">
+                          ${formatNumber(tradePrice, true)}
+                        </td>
+
+                        {/* 5. Asset Amount (Kuantitas Koin) */}
+                        <td className="px-6 py-4 text-right text-slate-400 font-mono text-xs">
+                          <span
+                            className={
+                              trade.type === "BUY"
+                                ? "text-cyan-500/80"
+                                : "text-purple-500/80"
+                            }
+                          >
+                            {trade.type === "BUY" ? "+" : "-"}
+                            {tradeAmount.toFixed(6)}
+                          </span>
+                          <span className="ml-1 text-[9px] text-slate-600 uppercase">
+                            {trade.symbol.replace("USDT", "")}
+                          </span>
+                        </td>
+
+                        {/* 6. Trade Size (Total Value in USDT) */}
+                        <td className="px-6 py-4 text-right text-white font-mono text-xs font-semibold">
+                          $
+                          {tradeSize.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </td>
+
+                        {/* 7. PnL Nominal ($) */}
+                        <td
+                          className={`px-6 py-4 text-right font-mono text-xs font-bold ${
+                            trade.type === "BUY"
+                              ? "text-slate-700"
+                              : pnlVal >= 0
+                                ? "text-green-400"
+                                : "text-orange-500"
+                          }`}
+                        >
+                          {trade.type === "SELL" ? (
+                            <span className="flex items-center justify-end gap-1">
+                              {pnlVal >= 0 ? "+" : ""}$
+                              {Math.abs(pnlVal).toLocaleString(undefined, {
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+
+                        {/* 8. PnL Percentage (%) */}
+                        <td
+                          className={`px-6 py-4 text-right font-mono text-xs font-bold ${
+                            trade.type === "BUY"
+                              ? "text-slate-700"
+                              : pnlPct >= 0
+                                ? "text-green-400"
+                                : "text-orange-500"
+                          }`}
+                        >
+                          {trade.type === "SELL" ? (
+                            <div
+                              className={`inline-block px-1.5 py-0.5 rounded ${
+                                pnlPct >= 0
+                                  ? "bg-green-500/10"
+                                  : "bg-orange-500/10"
+                              }`}
+                            >
+                              {pnlPct >= 0 ? "▲" : "▼"}{" "}
+                              {Math.abs(pnlPct).toFixed(2)}%
+                            </div>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  /* Empty State */
+                  <tr>
+                    <td colSpan={8} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <p className="text-slate-600 italic text-xs tracking-[0.2em] uppercase">
+                          No matching execution records found
+                        </p>
+                        <span className="text-[10px] text-slate-700 font-mono">
+                          Check your search term or filters
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            {/* PAGINATION CONTROLS */}
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-950/80 border-t border-slate-800">
+              <div className="text-[10px] text-slate-500 tracking-widest uppercase font-bold">
+                Showing{" "}
+                {paginatedTrades.length > 0
+                  ? (currentPage - 1) * itemsPerPage + 1
+                  : 0}{" "}
+                to{" "}
+                {Math.min(currentPage * itemsPerPage, processedTrades.length)}{" "}
+                of {processedTrades.length} Entries
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono rounded hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  PREV
+                </button>
+
+                <div className="px-3 text-xs font-mono text-slate-400">
+                  <span className="text-white font-bold">{currentPage}</span> /{" "}
+                  {totalPages || 1}
+                </div>
+
+                <button
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage >= totalPages || totalPages === 0}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono rounded hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  NEXT
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
