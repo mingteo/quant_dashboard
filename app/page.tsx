@@ -629,7 +629,7 @@ export default function AdvancedQuantDashboard() {
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div>{" "}
                 Alpha Matrix (vs BTC)
               </h2>
-              <div className="h-[1px] flex-grow bg-slate-800"></div>
+              <div className="h-px grow bg-slate-800"></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {btcMatrix.map((item, i) => (
@@ -650,7 +650,7 @@ export default function AdvancedQuantDashboard() {
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-500"></div>{" "}
                 Rotation Matrix (Alts vs ETH)
               </h2>
-              <div className="h-[1px] flex-grow bg-cyan-900/30"></div>
+              <div className="h-px grow bg-cyan-900/30"></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {ethMatrix.map((item, i) => (
@@ -671,7 +671,7 @@ export default function AdvancedQuantDashboard() {
                 <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>{" "}
                 Solana Beta Matrix (vs SOL)
               </h2>
-              <div className="h-[1px] flex-grow bg-purple-900/30"></div>
+              <div className="h-px grow bg-purple-900/30"></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               {solMatrix.map((item, i) => (
@@ -692,7 +692,7 @@ export default function AdvancedQuantDashboard() {
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>{" "}
                 Retail Sentiment Matrix (vs DOGE)
               </h2>
-              <div className="h-[1px] flex-grow bg-amber-900/30"></div>
+              <div className="h-px grow bg-amber-900/30"></div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {dogeMatrix.map((item, i) => (
