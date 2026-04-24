@@ -324,10 +324,10 @@ export default function AdvancedQuantDashboard() {
 
   const latest = history[history.length - 1] || {};
   const totalValue = parseFloat(latest.total_value || 0);
-  const cryptoExposurePct = (
-    (parseFloat(latest.crypto_value || 0) / totalValue) *
-    100
-  ).toFixed(1);
+  const cryptoExposurePct = positions
+    .filter((p) => p.symbol !== "USDT")
+    .reduce((acc, curr) => acc + parseFloat(curr.percentage || 0), 0)
+    .toFixed(1);
 
   // Logic untuk TPI, Regime, dan Bias (Derived dari backtest logic)
   const isBullish = parseFloat(latest.system_roi) > parseFloat(latest.btc_roi);
@@ -705,232 +705,290 @@ export default function AdvancedQuantDashboard() {
               ))}
             </div>
           </section>
-          {/* Dynamic Table with Pagination */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left border-collapse">
-              <thead className="text-slate-500 text-[10px] uppercase bg-slate-950/90 border-b border-slate-800">
-                <tr>
-                  {[
-                    { label: "Timestamp", key: "timestamp" },
-                    { label: "Asset", key: "symbol" },
-                    { label: "Type", key: "type", align: "text-center" },
-                    { label: "Price", key: "exit_price", align: "text-right" },
-                    { label: "Amount", key: "amount", align: "text-right" },
-                    { label: "Size (USDT)", key: "size", align: "text-right" },
-                    { label: "PnL ($)", key: "pnl_value", align: "text-right" },
-                    {
-                      label: "PnL (%)",
-                      key: "pnl_percent",
-                      align: "text-right",
-                    },
-                  ].map((col) => (
-                    <th
-                      key={col.key}
-                      onClick={() => requestSort(col.key)}
-                      className={`px-6 py-4 cursor-pointer hover:text-white transition-colors ${col.align || ""}`}
-                    >
-                      <div
-                        className={`flex items-center gap-1 ${col.align === "text-right" ? "justify-end" : col.align === "text-center" ? "justify-center" : ""}`}
-                      >
-                        {col.label}
-                        {sortConfig.key === col.key && (
-                          <span className="text-cyan-500">
-                            {sortConfig.direction === "asc" ? "↑" : "↓"}
-                          </span>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {paginatedTrades.length > 0 ? (
-                  paginatedTrades.map((trade, i) => {
-                    // Deklarasi variabel pendukung audit
-                    const tradePrice = parseFloat(
-                      trade.exit_price || trade.entry_price || 0,
-                    );
-                    const tradeAmount = parseFloat(trade.amount || 0);
-                    const tradeSize = tradePrice * tradeAmount;
-                    const pnlVal = parseFloat(trade.pnl_value || 0);
-                    const pnlPct = parseFloat(trade.pnl_percent || 0);
-
-                    // Helper untuk format angka (koin murah vs koin mahal)
-                    const formatNumber = (num: number, isPrice = false) => {
-                      if (num === 0) return "0.00";
-                      // Jika harga di bawah $1 (seperti SUI atau koin retail), tampilkan 4 desimal
-                      if (num < 1) return num.toFixed(isPrice ? 4 : 2);
-                      return num.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      });
-                    };
-
-                    return (
-                      <tr
-                        key={i}
-                        className="hover:bg-slate-800/40 transition-all group"
-                      >
-                        {/* 1. Timestamp */}
-                        <td className="px-6 py-4 text-slate-500 font-mono text-[10px] whitespace-nowrap">
-                          {new Date(trade.timestamp).toLocaleString("en-GB", {
-                            day: "2-digit",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </td>
-
-                        {/* 2. Asset Symbol */}
-                        <td className="px-6 py-4 font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">
-                          {trade.symbol}
-                        </td>
-
-                        {/* 3. Execution Type */}
-                        <td className="px-6 py-4 text-center">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${
-                              trade.type === "BUY"
-                                ? "bg-cyan-500/5 text-cyan-500 border-cyan-500/20"
-                                : "bg-purple-500/5 text-purple-400 border-purple-500/20"
-                            }`}
-                          >
-                            {trade.type}
-                          </span>
-                        </td>
-
-                        {/* 4. Execution Price */}
-                        <td className="px-6 py-4 text-right text-slate-300 font-mono text-xs">
-                          ${formatNumber(tradePrice, true)}
-                        </td>
-
-                        {/* 5. Asset Amount (Kuantitas Koin) */}
-                        <td className="px-6 py-4 text-right text-slate-400 font-mono text-xs">
-                          <span
-                            className={
-                              trade.type === "BUY"
-                                ? "text-cyan-500/80"
-                                : "text-purple-500/80"
-                            }
-                          >
-                            {trade.type === "BUY" ? "+" : "-"}
-                            {tradeAmount.toFixed(6)}
-                          </span>
-                          <span className="ml-1 text-[9px] text-slate-600 uppercase">
-                            {trade.symbol.replace("USDT", "")}
-                          </span>
-                        </td>
-
-                        {/* 6. Trade Size (Total Value in USDT) */}
-                        <td className="px-6 py-4 text-right text-white font-mono text-xs font-semibold">
-                          $
-                          {tradeSize.toLocaleString(undefined, {
-                            maximumFractionDigits: 0,
-                          })}
-                        </td>
-
-                        {/* 7. PnL Nominal ($) */}
-                        <td
-                          className={`px-6 py-4 text-right font-mono text-xs font-bold ${
-                            trade.type === "BUY"
-                              ? "text-slate-700"
-                              : pnlVal >= 0
-                                ? "text-green-400"
-                                : "text-orange-500"
-                          }`}
-                        >
-                          {trade.type === "SELL" ? (
-                            <span className="flex items-center justify-end gap-1">
-                              {pnlVal >= 0 ? "+" : ""}$
-                              {Math.abs(pnlVal).toLocaleString(undefined, {
-                                maximumFractionDigits: 2,
-                              })}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-
-                        {/* 8. PnL Percentage (%) */}
-                        <td
-                          className={`px-6 py-4 text-right font-mono text-xs font-bold ${
-                            trade.type === "BUY"
-                              ? "text-slate-700"
-                              : pnlPct >= 0
-                                ? "text-green-400"
-                                : "text-orange-500"
-                          }`}
-                        >
-                          {trade.type === "SELL" ? (
-                            <div
-                              className={`inline-block px-1.5 py-0.5 rounded ${
-                                pnlPct >= 0
-                                  ? "bg-green-500/10"
-                                  : "bg-orange-500/10"
-                              }`}
-                            >
-                              {pnlPct >= 0 ? "▲" : "▼"}{" "}
-                              {Math.abs(pnlPct).toFixed(2)}%
-                            </div>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  /* Empty State */
-                  <tr>
-                    <td colSpan={8} className="px-6 py-20 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <p className="text-slate-600 italic text-xs tracking-[0.2em] uppercase">
-                          No matching execution records found
-                        </p>
-                        <span className="text-[10px] text-slate-700 font-mono">
-                          Check your search term or filters
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            {/* PAGINATION CONTROLS */}
-            <div className="flex items-center justify-between px-6 py-4 bg-slate-950/80 border-t border-slate-800">
-              <div className="text-[10px] text-slate-500 tracking-widest uppercase font-bold">
-                Showing{" "}
-                {paginatedTrades.length > 0
-                  ? (currentPage - 1) * itemsPerPage + 1
-                  : 0}{" "}
-                to{" "}
-                {Math.min(currentPage * itemsPerPage, processedTrades.length)}{" "}
-                of {processedTrades.length} Entries
+          {/* SECTION: DYNAMIC PERFORMANCE AUDIT */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mt-8">
+            {/* Header & Controls */}
+            <div className="p-5 bg-slate-950/50 border-b border-slate-800 space-y-4 md:space-y-0 md:flex md:items-center md:justify-between">
+              <div>
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-cyan-500" /> Execution
+                  Explorer
+                </h3>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Audit {processedTrades.length} transactions with dynamic
+                  filtering
+                </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono rounded hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  PREV
-                </button>
-
-                <div className="px-3 text-xs font-mono text-slate-400">
-                  <span className="text-white font-bold">{currentPage}</span> /{" "}
-                  {totalPages || 1}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Search Bar */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search Symbol..."
+                    className="bg-slate-900 border border-slate-700 text-[10px] text-white px-3 py-2 rounded-lg focus:outline-none focus:border-cyan-500 w-40 transition-all"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
 
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
-                  disabled={currentPage >= totalPages || totalPages === 0}
-                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono rounded hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  NEXT
-                </button>
+                {/* Type Filter Toggle */}
+                <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700">
+                  {["ALL", "BUY", "SELL"].map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setFilterType(type)}
+                      className={`px-3 py-1 text-[9px] font-bold rounded-md transition-all ${
+                        filterType === type
+                          ? "bg-slate-700 text-white shadow-lg"
+                          : "text-slate-500 hover:text-slate-300"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Dynamic Table with Pagination */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead className="text-slate-500 text-[10px] uppercase bg-slate-950/90 border-b border-slate-800">
+                  <tr>
+                    {[
+                      { label: "Timestamp", key: "timestamp" },
+                      { label: "Asset", key: "symbol" },
+                      { label: "Type", key: "type", align: "text-center" },
+                      {
+                        label: "Price",
+                        key: "exit_price",
+                        align: "text-right",
+                      },
+                      { label: "Amount", key: "amount", align: "text-right" },
+                      {
+                        label: "Size (USDT)",
+                        key: "size",
+                        align: "text-right",
+                      },
+                      {
+                        label: "PnL ($)",
+                        key: "pnl_value",
+                        align: "text-right",
+                      },
+                      {
+                        label: "PnL (%)",
+                        key: "pnl_percent",
+                        align: "text-right",
+                      },
+                    ].map((col) => (
+                      <th
+                        key={col.key}
+                        onClick={() => requestSort(col.key)}
+                        className={`px-6 py-4 cursor-pointer hover:text-white transition-colors ${col.align || ""}`}
+                      >
+                        <div
+                          className={`flex items-center gap-1 ${col.align === "text-right" ? "justify-end" : col.align === "text-center" ? "justify-center" : ""}`}
+                        >
+                          {col.label}
+                          {sortConfig.key === col.key && (
+                            <span className="text-cyan-500">
+                              {sortConfig.direction === "asc" ? "↑" : "↓"}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/50">
+                  {paginatedTrades.length > 0 ? (
+                    paginatedTrades.map((trade, i) => {
+                      // Deklarasi variabel pendukung audit
+                      const tradePrice = parseFloat(
+                        trade.exit_price || trade.entry_price || 0,
+                      );
+                      const tradeAmount = parseFloat(trade.amount || 0);
+                      const tradeSize = tradePrice * tradeAmount;
+                      const pnlVal = parseFloat(trade.pnl_value || 0);
+                      const pnlPct = parseFloat(trade.pnl_percent || 0);
+
+                      // Helper untuk format angka (koin murah vs koin mahal)
+                      const formatNumber = (num: number, isPrice = false) => {
+                        if (num === 0) return "0.00";
+                        // Jika harga di bawah $1 (seperti SUI atau koin retail), tampilkan 4 desimal
+                        if (num < 1) return num.toFixed(isPrice ? 4 : 2);
+                        return num.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        });
+                      };
+
+                      return (
+                        <tr
+                          key={i}
+                          className="hover:bg-slate-800/40 transition-all group"
+                        >
+                          {/* 1. Timestamp */}
+                          <td className="px-6 py-4 text-slate-500 font-mono text-[10px] whitespace-nowrap">
+                            {new Date(trade.timestamp).toLocaleString("en-GB", {
+                              day: "2-digit",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+
+                          {/* 2. Asset Symbol */}
+                          <td className="px-6 py-4 font-bold text-slate-200 group-hover:text-cyan-400 transition-colors">
+                            {trade.symbol}
+                          </td>
+
+                          {/* 3. Execution Type */}
+                          <td className="px-6 py-4 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border ${
+                                trade.type === "BUY"
+                                  ? "bg-cyan-500/5 text-cyan-500 border-cyan-500/20"
+                                  : "bg-purple-500/5 text-purple-400 border-purple-500/20"
+                              }`}
+                            >
+                              {trade.type}
+                            </span>
+                          </td>
+
+                          {/* 4. Execution Price */}
+                          <td className="px-6 py-4 text-right text-slate-300 font-mono text-xs">
+                            ${formatNumber(tradePrice, true)}
+                          </td>
+
+                          {/* 5. Asset Amount (Kuantitas Koin) */}
+                          <td className="px-6 py-4 text-right text-slate-400 font-mono text-xs">
+                            <span
+                              className={
+                                trade.type === "BUY"
+                                  ? "text-cyan-500/80"
+                                  : "text-purple-500/80"
+                              }
+                            >
+                              {trade.type === "BUY" ? "+" : "-"}
+                              {tradeAmount.toFixed(6)}
+                            </span>
+                            <span className="ml-1 text-[9px] text-slate-600 uppercase">
+                              {trade.symbol.replace("USDT", "")}
+                            </span>
+                          </td>
+
+                          {/* 6. Trade Size (Total Value in USDT) */}
+                          <td className="px-6 py-4 text-right text-white font-mono text-xs font-semibold">
+                            $
+                            {tradeSize.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}
+                          </td>
+
+                          {/* 7. PnL Nominal ($) */}
+                          <td
+                            className={`px-6 py-4 text-right font-mono text-xs font-bold ${
+                              trade.type === "BUY"
+                                ? "text-slate-700"
+                                : pnlVal >= 0
+                                  ? "text-green-400"
+                                  : "text-orange-500"
+                            }`}
+                          >
+                            {trade.type === "SELL" ? (
+                              <span className="flex items-center justify-end gap-1">
+                                {pnlVal >= 0 ? "+" : ""}$
+                                {Math.abs(pnlVal).toLocaleString(undefined, {
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+
+                          {/* 8. PnL Percentage (%) */}
+                          <td
+                            className={`px-6 py-4 text-right font-mono text-xs font-bold ${
+                              trade.type === "BUY"
+                                ? "text-slate-700"
+                                : pnlPct >= 0
+                                  ? "text-green-400"
+                                  : "text-orange-500"
+                            }`}
+                          >
+                            {trade.type === "SELL" ? (
+                              <div
+                                className={`inline-block px-1.5 py-0.5 rounded ${
+                                  pnlPct >= 0
+                                    ? "bg-green-500/10"
+                                    : "bg-orange-500/10"
+                                }`}
+                              >
+                                {pnlPct >= 0 ? "▲" : "▼"}{" "}
+                                {Math.abs(pnlPct).toFixed(2)}%
+                              </div>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    /* Empty State */
+                    <tr>
+                      <td colSpan={8} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <p className="text-slate-600 italic text-xs tracking-[0.2em] uppercase">
+                            No matching execution records found
+                          </p>
+                          <span className="text-[10px] text-slate-700 font-mono">
+                            Check your search term or filters
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              {/* PAGINATION CONTROLS */}
+              <div className="flex items-center justify-between px-6 py-4 bg-slate-950/80 border-t border-slate-800">
+                <div className="text-[10px] text-slate-500 tracking-widest uppercase font-bold">
+                  Showing{" "}
+                  {paginatedTrades.length > 0
+                    ? (currentPage - 1) * itemsPerPage + 1
+                    : 0}{" "}
+                  to{" "}
+                  {Math.min(currentPage * itemsPerPage, processedTrades.length)}{" "}
+                  of {processedTrades.length} Entries
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono rounded hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    PREV
+                  </button>
+
+                  <div className="px-3 text-xs font-mono text-slate-400">
+                    <span className="text-white font-bold">{currentPage}</span>{" "}
+                    / {totalPages || 1}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={currentPage >= totalPages || totalPages === 0}
+                    className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono rounded hover:bg-slate-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    NEXT
+                  </button>
+                </div>
               </div>
             </div>
           </div>
