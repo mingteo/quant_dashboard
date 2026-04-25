@@ -1,13 +1,20 @@
-import { exec } from "child_process";
 import { NextResponse } from "next/server";
+import { setupAndFetchHistory } from "@/lib/fetchHistory";
 
-export async function GET() {
-  return new Promise((resolve) => {
-    exec("node fetchHistory.js", (error, stdout, stderr) => {
-      if (error) {
-        resolve(NextResponse.json({ error: stderr }, { status: 500 }));
-      }
-      resolve(NextResponse.json({ message: "Sync Success", output: stdout }));
-    });
-  });
+export async function GET(): Promise<NextResponse> {
+  try {
+    const result = await setupAndFetchHistory();
+
+    // Kembalikan response sukses ke browser/klien
+    return NextResponse.json(
+      { message: "Sync Success", output: result },
+      { status: 200 },
+    );
+  } catch (error: any) {
+    // Tangkap error jika terjadi kegagalan
+    return NextResponse.json(
+      { error: error.message || "Internal Server Error" },
+      { status: 500 },
+    );
+  }
 }
